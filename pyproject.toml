@@ -1,0 +1,39 @@
+[tool.poetry]
+name = "skeleton-tracker"
+version = "0.1.0"
+description = "A web application for tracking human skeletons in real-time video"
+authors = ["Naga Sanka <nsanka@me.com>"]
+readme = "README.md"
+packages = [{include = "skeleton_tracker"}]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+flask = "^2.3.3"
+opencv-python = "^4.8.0"
+mediapipe = "^0.10.3"
+numpy = "^1.24.3"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+black = "^23.7.0"
+isort = "^5.12.0"
+flake8 = "^6.1.0"
+
+[tool.poetry.scripts]
+start = "skeleton_tracker.app:main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 88
+target-version = ['py38']
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
