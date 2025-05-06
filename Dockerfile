@@ -9,7 +9,7 @@ COPY skeleton_tracker ./skeleton_tracker
 COPY tests ./tests
 
 RUN poetry config virtualenvs.create false \
-   && poetry install --no-dev
+   && poetry install --without dev
 
 # Expose the port
 EXPOSE 8080

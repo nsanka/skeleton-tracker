@@ -6,7 +6,7 @@ app = Flask(__name__, static_folder='static')
 @app.route('/')
 def index():
     """Serve the main HTML page with client-side processing."""
-    return render_template('index.html')
+    return render_template('index_clientside.html')
 
 @app.route('/static/<path:path>')
 def serve_static(path):
