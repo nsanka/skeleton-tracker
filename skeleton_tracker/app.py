@@ -1,5 +1,6 @@
-from flask import Flask, render_template, Response
 import atexit
+import os
+from flask import Flask, render_template, Response
 from skeleton_tracker.video_feed import VideoFeed
 
 # Create Flask application
@@ -47,14 +48,14 @@ def cleanup():
 # Register cleanup function to run when application exits
 atexit.register(cleanup)
 
+
 def main():
-    """
-    Main function to run the Flask application.
-    """
+    """Main function to run the Flask application."""
     try:
-        app.run(host='0.0.0.0', port=5500, debug=False)
+        # Use environment port if available (for cloud deployment)
+        port = int(os.environ.get('PORT', 5000))
+        app.run(host='0.0.0.0', port=port, debug=False)
     except KeyboardInterrupt:
-        # Handle Ctrl+C gracefully
         cleanup()
     except Exception as e:
         print(f"An error occurred: {e}")

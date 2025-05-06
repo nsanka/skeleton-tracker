@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>Human Skeleton Tracker - Client-Side</title>
+   <style>
+      body {
+         font-family: Arial, sans-serif;
+         background-color: #f0f0f0;
+         margin: 0;
+         padding: 20px;
+         color: #333;
+      }
+
+      h1 {
+         text-align: center;
+         color: #2c3e50;
+      }
+
+      .container {
+         max-width: 1200px;
+         margin: 0 auto;
+         padding: 20px;
+         background-color: white;
+         border-radius: 8px;
+         box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
+
+      .video-container {
+         display: flex;
+         flex-wrap: wrap;
+         justify-content: center;
+         gap: 20px;
+         margin-top: 20px;
+      }
+
+      .video-box {
+         flex: 1;
+         min-width: 300px;
+         max-width: 600px;
+         background-color: #2c3e50;
+         border-radius: 8px;
+         overflow: hidden;
+         box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+      }
+
+      .video-title {
+         padding: 10px;
+         text-align: center;
+         background-color: #34495e;
+         color: white;
+         font-weight: bold;
+      }
+
+      canvas,
+      video {
+         width: 100%;
+         height: auto;
+         display: block;
+      }
+
+      .controls {
+         margin-top: 20px;
+         text-align: center;
+      }
+
+      button {
+         background-color: #3498db;
+         color: white;
+         border: none;
+         padding: 10px 20px;
+         margin: 0 10px;
+         border-radius: 4px;
+         cursor: pointer;
+         font-size: 16px;
+         transition: background-color 0.3s;
+      }
+
+      button:hover {
+         background-color: #2980b9;
+      }
+
+      .footer {
+         margin-top: 20px;
+         text-align: center;
+         font-size: 14px;
+         color: #7f8c8d;
+      }
+
+      .status {
+         text-align: center;
+         font-weight: bold;
+         color: #3498db;
+         margin: 10px 0;
+      }
+
+      .fps-counter {
+         position: absolute;
+         top: 10px;
+         left: 10px;
+         background-color: rgba(0, 0, 0, 0.5);
+         color: white;
+         padding: 5px 10px;
+         border-radius: 4px;
+         font-size: 14px;
+      }
+
+      .hide {
+         display: none;
+      }
+
+      .canvas-container {
+         position: relative;
+      }
+
+      .setting {
+         margin: 10px 0;
+         display: flex;
+         justify-content: center;
+         align-items: center;
+         gap: 10px;
+      }
+
+      .setting label {
+         font-weight: bold;
+      }
+   </style>
+</head>
+
+<body>
+   <div class="container">
+      <h1>Human Skeleton Tracker</h1>
+      <p class="status" id="status">Loading MediaPipe...</p>
+
+      <div class="setting">
+         <label for="detectionConfidence">Detection Confidence:</label>
+         <input type="range" id="detectionConfidence" min="0.1" max="1.0" step="0.05" value="0.5">
+         <span id="detectionConfidenceValue">0.5</span>
+      </div>
+
+      <div class="video-container">
+         <div class="video-box">
+            <div class="video-title">Original Video with Skeleton Overlay</div>
+            <div class="canvas-container">
+               <canvas id="output"></canvas>
+               <div class="fps-counter" id="fps">FPS: 0</div>
+            </div>
+         </div>
+
+         <div class="video-box">
+            <div class="video-title">Skeleton Only View</div>
+            <div class="canvas-container">
+               <canvas id="skeletonOnly"></canvas>
+            </div>
+         </div>
+      </div>
+
+      <div class="controls">
+         <button id="startBtn">Start Webcam</button>
+         <button id="stopBtn" class="hide">Stop</button>
+         <button id="fullscreenBtn">Fullscreen</button>
+      </div>
+
+      <div class="footer">
+         <p>Human Skeleton Tracking Application using MediaPipe (Client-Side Processing)</p>
+      </div>
+   </div>
+
+   <video id="video" class="hide"></video>
+
+   <!-- Import MediaPipe libraries -->
+   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"
+      crossorigin="anonymous"></script>
+   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+
+   <script>
+      // DOM elements
+      const videoElement = document.getElementById('video');
+      const outputCanvas = document.getElementById('output');
+      const skeletonCanvas = document.getElementById('skeletonOnly');
+      const statusElement = document.getElementById('status');
+      const fpsElement = document.getElementById('fps');
+      const startBtn = document.getElementById('startBtn');
+      const stopBtn = document.getElementById('stopBtn');
+      const fullscreenBtn = document.getElementById('fullscreenBtn');
+      const detectionConfidenceSlider = document.getElementById('detectionConfidence');
+      const detectionConfidenceValue = document.getElementById('detectionConfidenceValue');
+
+      // Canvas contexts
+      const outputCtx = outputCanvas.getContext('2d');
+      const skeletonCtx = skeletonCanvas.getContext('2d');
+
+      // Variables
+      let pose;
+      let camera;
+      let lastFrameTime = 0;
+      let isRunning = false;
+      let detectionConfidence = 0.5;
+
+      // Initialize MediaPipe Pose
+      async function initializePose() {
+         statusElement.textContent = 'Loading MediaPipe Pose...';
+
+         // Create pose instance
+         pose = new Pose({
+            locateFile: (file) => {
+               return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+            }
+         });
+
+         // Set pose options
+         pose.setOptions({
+            modelComplexity: 1,
+            smoothLandmarks: true,
+            minDetectionConfidence: detectionConfidence,
+            minTrackingConfidence: 0.5
+         });
+
+         // Set up pose processing
+         pose.onResults(onResults);
+
+         statusElement.textContent = 'MediaPipe loaded! Click "Start Webcam" to begin.';
+         startBtn.disabled = false;
+      }
+
+      // Handle pose detection results
+      function onResults(results) {
+         // Calculate FPS
+         const now = performance.now();
+         const fps = Math.round(1000 / (now - lastFrameTime));
+         lastFrameTime = now;
+         fpsElement.textContent = `FPS: ${fps}`;
+
+         // Get canvas dimensions based on video
+         if (outputCanvas.width !== results.image.width || outputCanvas.height !== results.image.height) {
+            outputCanvas.width = results.image.width;
+            outputCanvas.height = results.image.height;
+            skeletonCanvas.width = results.image.width;
+            skeletonCanvas.height = results.image.height;
+         }
+
+         // Clear canvases
+         outputCtx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
+         skeletonCtx.clearRect(0, 0, skeletonCanvas.width, skeletonCanvas.height);
+
+         // Draw the original image on output canvas
+         outputCtx.drawImage(results.image, 0, 0, outputCanvas.width, outputCanvas.height);
+
+         // If pose landmarks exist, draw them
+         if (results.poseLandmarks) {
+            // Draw pose connections on output canvas
+            drawConnectors(outputCtx, results.poseLandmarks, POSE_CONNECTIONS, {
+               color: '#00FF00',
+               lineWidth: 2
+            });
+
+            // Draw pose landmarks on output canvas
+            drawLandmarks(outputCtx, results.poseLandmarks, {
+               color: '#FF0000',
+               lineWidth: 1,
+               radius: 3
+            });
+
+            // Draw pose connections on skeleton canvas (black background)
+            drawConnectors(skeletonCtx, results.poseLandmarks, POSE_CONNECTIONS, {
+               color: '#00FF00',
+               lineWidth: 2
+            });
+
+            // Draw pose landmarks on skeleton canvas
+            drawLandmarks(skeletonCtx, results.poseLandmarks, {
+               color: '#FF0000',
+               lineWidth: 1,
+               radius: 3
+            });
+         }
+      }
+
+      // Start webcam and pose detection
+      function startCamera() {
+         if (isRunning) return;
+         isRunning = true;
+
+         // Update UI
+         startBtn.classList.add('hide');
+         stopBtn.classList.remove('hide');
+         statusElement.textContent = 'Starting camera...';
+
+         // Set up camera
+         camera = new Camera(videoElement, {
+            onFrame: async () => {
+               await pose.send({ image: videoElement });
+            },
+            width: 640,
+            height: 480
+         });
+
+         // Start camera
+         camera.start()
+            .then(() => {
+               statusElement.textContent = 'Tracking active';
+            })
+            .catch(error => {
+               console.error('Error starting camera:', error);
+               statusElement.textContent = 'Error: ' + error.message;
+               isRunning = false;
+               startBtn.classList.remove('hide');
+               stopBtn.classList.add('hide');
+            });
+      }
+
+      // Stop camera and pose detection
+      function stopCamera() {
+         if (!isRunning) return;
+
+         // Update UI
+         startBtn.classList.remove('hide');
+         stopBtn.classList.add('hide');
+         statusElement.textContent = 'Stopped';
+
+         // Stop camera
+         if (camera) {
+            camera.stop();
+         }
+
+         // Clear canvases
+         outputCtx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
+         skeletonCtx.clearRect(0, 0, skeletonCanvas.width, skeletonCanvas.height);
+
+         isRunning = false;
+      }
+
+      // Toggle fullscreen
+      function toggleFullscreen() {
+         const container = document.querySelector('.video-container');
+
+         if (!document.fullscreenElement) {
+            if (container.requestFullscreen) {
+               container.requestFullscreen();
+            } else if (container.mozRequestFullScreen) { /* Firefox */
+               container.mozRequestFullScreen();
+            } else if (container.webkitRequestFullscreen) { /* Chrome, Safari & Opera */
+               container.webkitRequestFullscreen();
+            } else if (container.msRequestFullscreen) { /* IE/Edge */
+               container.msRequestFullscreen();
+            }
+         } else {
+            if (document.exitFullscreen) {
+               document.exitFullscreen();
+            } else if (document.mozCancelFullScreen) {
+               document.mozCancelFullScreen();
+            } else if (document.webkitExitFullscreen) {
+               document.webkitExitFullscreen();
+            } else if (document.msExitFullscreen) {
+               document.msExitFullscreen();
+            }
+         }
+      }
+
+      // Event listeners
+      startBtn.addEventListener('click', startCamera);
+      stopBtn.addEventListener('click', stopCamera);
+      fullscreenBtn.addEventListener('click', toggleFullscreen);
+
+      // Detection confidence slider
+      detectionConfidenceSlider.addEventListener('input', function () {
+         detectionConfidence = parseFloat(this.value);
+         detectionConfidenceValue.textContent = detectionConfidence.toFixed(2);
+
+         if (pose) {
+            pose.setOptions({
+               minDetectionConfidence: detectionConfidence
+            });
+         }
+      });
+
+      // Initialize
+      document.addEventListener('DOMContentLoaded', () => {
+         startBtn.disabled = true;
+         initializePose();
+      });
+   </script>
+</body>
+
+</html>

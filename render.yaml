@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: skeleton-tracker
+    runtime: docker
+    repo: https://github.com/nsanka/skeleton-tracker
+    region: oregon
+    plan: free
+    branch: deploy
+    healthCheckPath: /
+    envVars:
+      - key: PORT
+        value: 8080
